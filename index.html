@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Visualize the financial impact of paying a lump sum toward your fixed-rate mortgage — compare interest savings, timing sensitivity, and total cost.">
+<title>Mortgage Lump Sum Analyzer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --ink:       #17160f;
+  --ink2:      #4a4740;
+  --ink3:      #8c8a82;
+  --paper:     #faf9f5;
+  --paper2:    #f2f0ea;
+  --paper3:    #e8e5dc;
+  --rule:      rgba(23,22,15,0.1);
+  --rule2:     rgba(23,22,15,0.18);
+  --accent:    #2c4a8c;
+  --accent2:   #8c7a2c;
+  --accent-lt: #d6e0f5;
+  --bar1:      #2c4a8c;
+  --bar1lt:    #a8bce0;
+  --bar2:      #8c7a2c;
+  --line1:     #2c4a8c;
+  --line2:     #7a2c2c;
+  --mono:      'DM Mono', monospace;
+  --serif:     'Instrument Serif', Georgia, serif;
+  --sans:      'DM Sans', sans-serif;
+  --sidebar-w: 300px;
+  --radius:    4px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink:       #f0ede4;
+    --ink2:      #b8b4a8;
+    --ink3:      #6e6b62;
+    --paper:     #131210;
+    --paper2:    #1c1b18;
+    --paper3:    #252420;
+    --rule:      rgba(240,237,228,0.1);
+    --rule2:     rgba(240,237,228,0.18);
+    --accent:    #7a9fd4;
+    --accent2:   #d4bc5a;
+    --accent-lt: #1a2a46;
+    --bar1:      #5a82c4;
+    --bar1lt:    #2a3e6a;
+    --bar2:      #c4a83a;
+    --line1:     #7a9fd4;
+    --line2:     #d47a7a;
+  }
+}
+
+html, body { height: 100%; }
+
+body {
+  font-family: var(--sans);
+  background: var(--paper);
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ── Header ─────────────────────────────────────────────────────────── */
+header {
+  background: var(--paper);
+  border-bottom: 1px solid var(--rule2);
+  padding: 0 24px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 10;
+}
+
+.header-left { display: flex; align-items: baseline; gap: 14px; }
+
+.site-title {
+  font-family: var(--serif);
+  font-size: 20px;
+  font-style: italic;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  line-height: 1;
+}
+
+.site-sub {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink3);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.lock-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--paper2);
+  border: 1px solid var(--rule2);
+  border-radius: 20px;
+  padding: 5px 12px 5px 8px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  user-select: none;
+}
+.lock-pill:hover { background: var(--paper3); }
+.lock-pill input { display: none; }
+.lock-pill-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--ink3); transition: background 0.2s;
+  flex-shrink: 0;
+}
+.lock-pill input:checked ~ .lock-pill-dot { background: var(--accent); }
+.lock-pill-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink2);
+  white-space: nowrap;
+}
+
+/* ── Layout ──────────────────────────────────────────────────────────── */
+.layout { display: flex; flex: 1; overflow: hidden; min-height: 0; }
+
+/* ── Sidebar ─────────────────────────────────────────────────────────── */
+.sidebar {
+  width: var(--sidebar-w);
+  flex-shrink: 0;
+  background: var(--paper2);
+  border-right: 1px solid var(--rule2);
+  overflow-y: auto;
+  padding: 20px 18px 28px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--rule2) transparent;
+}
+.sidebar::-webkit-scrollbar { width: 3px; }
+.sidebar::-webkit-scrollbar-thumb { background: var(--rule2); border-radius: 2px; }
+
+.sidebar-sec {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink3);
+  margin: 20px 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.sidebar-sec:first-child { margin-top: 0; }
+
+.ctrl { margin-bottom: 13px; }
+.ctrl-label {
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--ink2);
+  margin-bottom: 5px;
+  display: block;
+}
+.ctrl-row { display: flex; align-items: center; gap: 7px; }
+.ctrl-row input[type=range] {
+  flex: 1; min-width: 0; cursor: pointer;
+  accent-color: var(--accent);
+  height: 3px;
+}
+
+.ctrl-row input[type=text] {
+  width: 76px; flex-shrink: 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--rule2);
+  border-radius: var(--radius);
+  padding: 4px 6px;
+  text-align: right;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.ctrl-row input[type=text]:focus { border-color: var(--accent); }
+.ctrl-row input[type=text].error { border-color: #c0392b; color: #c0392b; }
+
+/* ── Metric strip ────────────────────────────────────────────────────── */
+.metric-strip {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+}
+.metric {
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 9px 10px;
+}
+.metric-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink3);
+  margin-bottom: 3px;
+}
+.metric-val {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+}
+.metric-val.accent  { color: var(--accent); }
+.metric-val.accent2 { color: var(--accent2); }
+
+/* ── Charts grid ─────────────────────────────────────────────────────── */
+.charts {
+  flex: 1; min-width: 0; min-height: 0;
+  overflow: auto;
+  padding: 16px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 14px;
+}
+
+.chart-card {
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 14px 16px 12px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.chart-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  flex-shrink: 0;
+  gap: 8px;
+}
+
+.chart-title {
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink2);
+  letter-spacing: 0.02em;
+  line-height: 1.3;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink3);
+}
+
+.chart-outer { position: relative; flex: 1; min-height: 0; }
+.chart-outer canvas { display: block; }
+
+/* ── Responsive ──────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  :root { --sidebar-w: 260px; }
+}
+@media (max-width: 700px) {
+  body { overflow: auto; }
+  .layout { flex-direction: column; overflow: visible; }
+  .sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--rule2); }
+  .charts { grid-template-columns: 1fr; grid-template-rows: repeat(4, 280px); overflow: visible; }
+  header { height: auto; padding: 12px 16px; flex-wrap: wrap; gap: 8px; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <span class="site-title">Mortgage Lump Sum Analyzer</span>
+    <span class="site-sub">Fixed-rate · interest savings</span>
+  </div>
+  <label class="lock-pill" title="Lock all y-axes to the maximum value assuming no lump sum is ever paid">
+    <input type="checkbox" id="ylock">
+    <span class="lock-pill-dot"></span>
+    <span class="lock-pill-label">Lock y-axes to baseline</span>
+  </label>
+</header>
+
+<div class="layout">
+
+  <!-- ── Sidebar ── -->
+  <aside class="sidebar">
+
+    <div class="sidebar-sec">Mortgage &amp; loan</div>
+    <div id="ctrl1"></div>
+
+    <div class="sidebar-sec">Savings rate</div>
+    <div id="ctrl2"></div>
+
+    <div class="sidebar-sec">Lump sum strategy</div>
+    <div id="ctrl3"></div>
+
+    <div class="metric-strip" id="metrics"></div>
+
+  </aside>
+
+  <!-- ── 2×2 Chart grid ── -->
+  <main class="charts">
+
+    <!-- Top-left: cumulative interest saved -->
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <div class="chart-title">Cumulative interest saved over time</div>
+        <div class="legend">
+          <span class="legend-item">
+            <svg width="18" height="8"><rect x="0" y="1" width="18" height="6" fill="#a8bce0" rx="1"/></svg>
+            vs. no lump sum
+          </span>
+        </div>
+      </div>
+      <div class="chart-outer">
+        <canvas id="iChart" role="img" aria-label="Bar chart of cumulative interest saved over loan term when lump sum is applied"></canvas>
+      </div>
+    </div>
+
+    <!-- Top-right: total cost stacked bar -->
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <div class="chart-title">Total mortgage cost breakdown</div>
+        <div class="legend">
+          <span class="legend-item"><svg width="18" height="8"><rect x="0" y="1" width="18" height="6" fill="#a8bce0" rx="1"/></svg>Principal</span>
+          <span class="legend-item"><svg width="18" height="8"><rect x="0" y="1" width="18" height="6" fill="#5a82c4" rx="1"/></svg>Interest (no lump sum)</span>
+          <span class="legend-item"><svg width="18" height="8"><rect x="0" y="1" width="18" height="6" fill="#c4a83a" rx="1"/></svg>Interest (with lump sum)</span>
+        </div>
+      </div>
+      <div class="chart-outer">
+        <canvas id="costChart" role="img" aria-label="Stacked bar chart comparing total amount paid on mortgage with and without lump sum"></canvas>
+      </div>
+    </div>
+
+    <!-- Bottom-left: timing sensitivity -->
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <div class="chart-title">Interest saved vs. year lump sum is paid</div>
+        <div class="legend">
+          <span class="legend-item"><svg width="18" height="8"><line x1="0" y1="4" x2="18" y2="4" stroke="#5a82c4" stroke-width="2"/></svg>Total saved</span>
+          <span class="legend-item"><svg width="18" height="8"><circle cx="9" cy="4" r="3.5" fill="#2c4a8c"/></svg>Current year</span>
+        </div>
+      </div>
+      <div class="chart-outer">
+        <canvas id="timingChart" role="img" aria-label="Line chart showing how total interest saved decreases the later the lump sum is paid"></canvas>
+      </div>
+    </div>
+
+    <!-- Bottom-right: remaining balance -->
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <div class="chart-title">Remaining mortgage balance</div>
+        <div class="legend">
+          <span class="legend-item"><svg width="18" height="8"><line x1="0" y1="4" x2="18" y2="4" stroke="#5a82c4" stroke-width="2"/></svg>No lump sum</span>
+          <span class="legend-item"><svg width="18" height="8"><line x1="0" y1="4" x2="18" y2="4" stroke="#7a2c2c" stroke-width="2" stroke-dasharray="5,3"/></svg>With lump sum</span>
+        </div>
+      </div>
+      <div class="chart-outer">
+        <canvas id="mChart" role="img" aria-label="Line chart of remaining mortgage principal balance over the loan term"></canvas>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+'use strict';
+
+// ── Slider config ──────────────────────────────────────────────────────────
+const SLIDERS = [
+  { grp:1, id:'price',   label:'Home purchase price',       min:10000,  max:5000000, step:10000, val:600000,
+    fmt: v=>'$'+Math.round(v).toLocaleString(), parse: s=>parseFloat(s.replace(/[$,\s]/g,'')), unit:'$' },
+  { grp:1, id:'down',    label:'Down payment',              min:0,      max:600000,  step:5000,  val:120000,
+    fmt: v=>'$'+Math.round(v).toLocaleString(), parse: s=>parseFloat(s.replace(/[$,\s]/g,'')), unit:'$' },
+  { grp:1, id:'rate',    label:'Interest rate (%)',         min:1,      max:15,      step:0.05,  val:6.5,
+    fmt: v=>(+v).toFixed(2)+'%',               parse: s=>parseFloat(s.replace(/[%\s]/g,'')),  unit:'%' },
+  { grp:1, id:'term',    label:'Loan term (years)',         min:5,      max:30,      step:1,     val:30,
+    fmt: v=>v+' yrs',                          parse: s=>parseFloat(s.replace(/[^0-9.]/g,'')), unit:'yrs' },
+  { grp:2, id:'savrate', label:'Savings account rate (%)',  min:0.01,   max:10,      step:0.05,  val:4.5,
+    fmt: v=>(+v).toFixed(2)+'%',               parse: s=>parseFloat(s.replace(/[%\s]/g,'')),  unit:'%' },
+  { grp:3, id:'lump',    label:'Lump sum amount',           min:0,      max:2000000, step:5000,  val:100000,
+    fmt: v=>'$'+Math.round(v).toLocaleString(), parse: s=>parseFloat(s.replace(/[$,\s]/g,'')), unit:'$' },
+  { grp:3, id:'lumpyr',  label:'Year lump sum is paid',     min:0,      max:29,      step:1,     val:0,
+    fmt: v=>v===0?'At closing':'Year '+v,
+    parse: s=>{ if(/closing/i.test(s)) return 0; return parseFloat(s.replace(/[^0-9.]/g,'')); }, unit:'yr' },
+];
+
+const state = {};
+SLIDERS.forEach(s => { state[s.id] = s.val; });
+let yLocked = false;
+let yMaxCache = null;
+
+// ── Build controls ─────────────────────────────────────────────────────────
+[1,2,3].forEach(gi => {
+  const el = document.getElementById('ctrl'+gi);
+  SLIDERS.filter(s => s.grp === gi).forEach(s => {
+    const wrap = document.createElement('div');
+    wrap.className = 'ctrl';
+    wrap.innerHTML = `
+      <span class="ctrl-label">${s.label}</span>
+      <div class="ctrl-row">
+        <input type="range" id="${s.id}" min="${s.min}" max="${s.max}" step="${s.step}" value="${s.val}" aria-label="${s.label}">
+        <input type="text"  id="${s.id}_txt" value="${s.fmt(s.val)}" spellcheck="false" autocomplete="off" aria-label="${s.label} value">
+      </div>`;
+    el.appendChild(wrap);
+  });
+});
+
+function clampDown() {
+  const maxDown = Math.floor(state.price * 0.97 / 5000) * 5000;
+  const downEl = document.getElementById('down');
+  downEl.max = maxDown;
+  if (state.down > maxDown) syncVal('down', maxDown);
+  document.getElementById('lump').max = Math.min(2000000, Math.max(state.price, 200000));
+}
+
+function syncVal(id, val) {
+  const s = SLIDERS.find(x => x.id === id);
+  const el = document.getElementById(id);
+  const clamped = Math.min(Math.max(val, +el.min), +el.max);
+  state[id] = clamped;
+  el.value = clamped;
+  document.getElementById(id+'_txt').value = s.fmt(clamped);
+  document.getElementById(id+'_txt').classList.remove('error');
+}
+
+SLIDERS.forEach(s => {
+  const slider = document.getElementById(s.id);
+  const txt    = document.getElementById(s.id+'_txt');
+
+  slider.addEventListener('input', e => {
+    state[s.id] = +e.target.value;
+    txt.value = s.fmt(+e.target.value);
+    txt.classList.remove('error');
+    if (s.id === 'price') clampDown();
+    yMaxCache = null;
+    update();
+  });
+
+  function commit() {
+    const parsed = s.parse(txt.value.trim());
+    if (isNaN(parsed) || parsed < +slider.min) { txt.classList.add('error'); return; }
+    txt.classList.remove('error');
+    if (parsed > +slider.max && (s.unit === '$' || s.unit === 'yr')) slider.max = parsed;
+    const clamped = Math.min(Math.max(parsed, +slider.min), +slider.max);
+    state[s.id] = clamped;
+    slider.value = clamped;
+    txt.value = s.fmt(clamped);
+    if (s.id === 'price') clampDown();
+    yMaxCache = null;
+    update();
+  }
+
+  txt.addEventListener('keydown', e => {
+    if (e.key === 'Enter')  { commit(); txt.blur(); }
+    if (e.key === 'Escape') { txt.value = s.fmt(state[s.id]); txt.classList.remove('error'); txt.blur(); }
+  });
+  txt.addEventListener('blur', commit);
+  txt.addEventListener('focus', () => txt.select());
+});
+
+document.getElementById('ylock').addEventListener('change', e => {
+  yLocked = e.target.checked;
+  update();
+});
+
+// ── Finance math ───────────────────────────────────────────────────────────
+function mpmt(p, r, n) {
+  if (p <= 0) return 0;
+  const mr = r / 100 / 12;
+  if (mr === 0) return p / n;
+  return p * mr * Math.pow(1+mr,n) / (Math.pow(1+mr,n)-1);
+}
+
+function runNoLump(principal, rate, term) {
+  const N = term*12, mr = rate/100/12, mp = mpmt(principal, rate, N);
+  let bal = principal, totalInt = 0;
+  const annualBal = [Math.round(bal)];
+  for (let m = 0; m < N; m++) {
+    if (bal > 0) { const i = bal*mr; totalInt += i; bal = Math.max(0, bal-(mp-i)); }
+    if ((m+1)%12 === 0) annualBal.push(Math.round(bal));
+  }
+  return { totalInt, annualBal, mp };
+}
+
+function runWithLump(principal, rate, term, lump, lumpMonth) {
+  const N = term*12, mr = rate/100/12, baseMP = mpmt(principal, rate, N);
+
+  // Parallel simulation for intSavedByYear
+  let bB=principal, bL=principal, appL=false, lmpMP=baseMP, iB=0, iL=0;
+  const intSaved = [0];
+  for (let m = 0; m < N; m++) {
+    if (m === lumpMonth && !appL) { bL = Math.max(0,bL-lump); appL=true; lmpMP = mpmt(bL,rate,N-m); }
+    if (bB>0){const i=bB*mr;iB+=i;bB=Math.max(0,bB-(baseMP-i));}
+    if (bL>0){const i=bL*mr;iL+=i;bL=Math.max(0,bL-(lmpMP-i));}
+    if ((m+1)%12===0) intSaved.push(Math.round(Math.max(0,iB-iL)));
+  }
+
+  // Clean balance trajectory
+  let bal2=principal, tInt2=0, app2=false, mp2=baseMP;
+  const annualBal2 = [Math.round(bal2)];
+  for (let m = 0; m < N; m++) {
+    if (m===lumpMonth&&!app2){bal2=Math.max(0,bal2-lump);app2=true;mp2=mpmt(bal2,rate,N-m);}
+    if (bal2>0){const i=bal2*mr;tInt2+=i;bal2=Math.max(0,bal2-(mp2-i));}
+    if ((m+1)%12===0) annualBal2.push(Math.round(bal2));
+  }
+  return { totalInt:tInt2, annualBal:annualBal2, intSaved };
+}
+
+function simulate() {
+  const { price, down, rate, term, lump, lumpyr } = state;
+  const principal = Math.max(0, price - down);
+  const base     = runNoLump(principal, rate, term);
+  const withLump = runWithLump(principal, rate, term, lump, lumpyr*12);
+
+  const labels = Array.from({length:term+1}, (_,i) => 'Yr '+i);
+
+  const timingLabels=[], timingSaved=[];
+  for (let y = 0; y < term; y++) {
+    timingLabels.push('Yr '+y);
+    const s = runWithLump(principal, rate, term, lump, y*12);
+    timingSaved.push(Math.round(Math.max(0, base.totalInt - s.totalInt)));
+  }
+
+  if (!yMaxCache) {
+    yMaxCache = {
+      iMax:    base.totalInt,
+      costMax: principal + base.totalInt,
+      timingMax: base.totalInt,
+      mMax:    principal,
+    };
+  }
+
+  return {
+    labels, principal,
+    baseInt: base.totalInt, lumpInt: withLump.totalInt,
+    bBase: base.annualBal, bLump: withLump.annualBal,
+    intSaved: withLump.intSaved,
+    timingLabels, timingSaved,
+    baseMP: base.mp,
+    downPct: price > 0 ? Math.round(down/price*100) : 0,
+  };
+}
+
+// ── Formatting ─────────────────────────────────────────────────────────────
+function fmtM(v) {
+  const a = Math.abs(v), sg = v < 0 ? '-' : '';
+  if (a >= 1000000) return sg+'$'+(a/1000000).toFixed(2)+'M';
+  if (a >= 1000)    return sg+'$'+Math.round(a/1000)+'k';
+  return sg+'$'+Math.round(a);
+}
+
+function updateMetrics(d) {
+  const saved = Math.max(0, d.baseInt - d.lumpInt);
+  const items = [
+    { label:'Loan amount',          val:fmtM(d.principal),                         cls:'' },
+    { label:'Down payment',         val:d.downPct+'% of price',                    cls:'' },
+    { label:'Monthly payment',      val:'$'+Math.round(d.baseMP).toLocaleString(), cls:'' },
+    { label:'Baseline interest',    val:fmtM(d.baseInt),                           cls:'' },
+    { label:'Interest w/ lump sum', val:fmtM(d.lumpInt),                           cls:'accent' },
+    { label:'Interest saved',       val:fmtM(saved),                               cls:'accent2' },
+  ];
+  document.getElementById('metrics').innerHTML = items.map(i =>
+    `<div class="metric"><div class="metric-label">${i.label}</div><div class="metric-val ${i.cls}">${i.val}</div></div>`
+  ).join('');
+}
+
+// ── Chart helpers ──────────────────────────────────────────────────────────
+const isDark  = () => window.matchMedia('(prefers-color-scheme: dark)').matches;
+const gridC   = () => isDark() ? 'rgba(240,237,228,0.07)' : 'rgba(23,22,15,0.06)';
+const tickC   = () => isDark() ? '#6e6b62' : '#8c8a82';
+
+function yScale(label, yMax) {
+  const s = {
+    title: { display:true, text:label, color:tickC(), font:{family:"'DM Mono',monospace", size:9}, padding:{bottom:4} },
+    ticks: { color:tickC(), font:{family:"'DM Mono',monospace", size:9}, callback:v=>fmtM(v), maxTicksLimit:6 },
+    grid:  { color:gridC() },
+    border:{ color:gridC() },
+  };
+  if (yLocked && yMax != null) { s.min = 0; s.max = yMax * 1.06; }
+  return s;
+}
+
+function xScale() {
+  return {
+    ticks: { color:tickC(), font:{family:"'DM Mono',monospace", size:9}, maxRotation:0, autoSkip:true, maxTicksLimit:8 },
+    grid:  { color:gridC() },
+    border:{ color:gridC() },
+  };
+}
+
+function commonOpts(yLabel, yMax) {
+  return {
+    responsive:true, maintainAspectRatio:false,
+    animation:{ duration: 180 },
+    plugins:{ legend:{display:false}, tooltip:{
+      backgroundColor: isDark()?'#252420':'#faf9f5',
+      borderColor: isDark()?'rgba(240,237,228,0.18)':'rgba(23,22,15,0.14)',
+      borderWidth:1,
+      titleColor: isDark()?'#b8b4a8':'#4a4740',
+      bodyColor:  isDark()?'#f0ede4':'#17160f',
+      titleFont:  {family:"'DM Mono',monospace", size:10},
+      bodyFont:   {family:"'DM Mono',monospace", size:10},
+      padding:8,
+      callbacks:{ label: ctx => ' '+fmtM(ctx.raw) }
+    }},
+    scales:{ x:xScale(), y:yScale(yLabel, yMax) }
+  };
+}
+
+// ── Chart instances ────────────────────────────────────────────────────────
+let iChart, costChart, timingChart, mChart;
+
+function update() {
+  const d = simulate();
+  updateMetrics(d);
+  const ym = yMaxCache;
+
+  // Interest saved bar
+  const iData = { labels:d.labels, datasets:[{
+    label:'Interest saved',
+    data:d.intSaved,
+    backgroundColor: isDark()?'#2a3e6a':'#a8bce0',
+    borderColor:     isDark()?'#5a82c4':'#2c4a8c',
+    borderWidth:1, borderRadius:2,
+  }]};
+
+  // Cost breakdown stacked bar
+  const costData = {
+    labels:['No lump sum','With lump sum'],
+    datasets:[
+      { label:'Principal',                data:[Math.round(d.principal),Math.round(d.principal)], backgroundColor:isDark()?'#2a3e6a':'#a8bce0', borderRadius:3 },
+      { label:'Interest — no lump sum',   data:[Math.round(d.baseInt),0],                         backgroundColor:isDark()?'#5a82c4':'#2c4a8c', borderRadius:0 },
+      { label:'Interest — with lump sum', data:[0,Math.round(d.lumpInt)],                         backgroundColor:isDark()?'#8c6e1c':'#c4a83a', borderRadius:0 },
+    ]
+  };
+  const costY = {
+    stacked:true,
+    title:{ display:true, text:'Total paid ($)', color:tickC(), font:{family:"'DM Mono',monospace",size:9}, padding:{bottom:4} },
+    ticks:{ color:tickC(), font:{family:"'DM Mono',monospace",size:9}, callback:v=>fmtM(v), maxTicksLimit:6 },
+    grid:{ color:gridC() }, border:{ color:gridC() },
+  };
+  if (yLocked) { costY.min=0; costY.max=ym.costMax*1.06; }
+  const costOpts = {
+    responsive:true, maintainAspectRatio:false, animation:{duration:180},
+    plugins:{ legend:{display:false}, tooltip:{
+      backgroundColor:isDark()?'#252420':'#faf9f5', borderColor:isDark()?'rgba(240,237,228,0.18)':'rgba(23,22,15,0.14)', borderWidth:1,
+      titleColor:isDark()?'#b8b4a8':'#4a4740', bodyColor:isDark()?'#f0ede4':'#17160f',
+      titleFont:{family:"'DM Mono',monospace",size:10}, bodyFont:{family:"'DM Mono',monospace",size:10}, padding:8,
+      callbacks:{ label:ctx=>` ${ctx.dataset.label}: ${fmtM(ctx.raw)}` }
+    }},
+    scales:{ x:{ stacked:true, ticks:{color:tickC(),font:{family:"'DM Mono',monospace",size:10}}, grid:{color:gridC()}, border:{color:gridC()} }, y:costY }
+  };
+
+  // Timing sensitivity
+  const ptR = d.timingLabels.map((_,i) => i===state.lumpyr ? 5 : 0);
+  const ptC = d.timingLabels.map((_,i) => i===state.lumpyr ? (isDark()?'#7a9fd4':'#2c4a8c') : (isDark()?'#5a82c4':'#2c4a8c'));
+  const timingData = { labels:d.timingLabels, datasets:[{
+    label:'Interest saved', data:d.timingSaved,
+    borderColor:  isDark()?'#5a82c4':'#2c4a8c',
+    borderWidth:2, pointRadius:ptR, pointBackgroundColor:ptC, pointBorderColor:ptC,
+    tension:0.35, fill:false,
+  }]};
+
+  // Balance lines
+  const mData = { labels:d.labels, datasets:[
+    { label:'No lump sum',   data:d.bBase, borderColor:isDark()?'#5a82c4':'#2c4a8c', borderWidth:2, pointRadius:0, tension:0.3, borderDash:[],    fill:false },
+    { label:'With lump sum', data:d.bLump, borderColor:isDark()?'#c47a7a':'#7a2c2c', borderWidth:2, pointRadius:0, tension:0.3, borderDash:[5,3], fill:false },
+  ]};
+
+  function apply(ref, id, type, data, opts) {
+    if (ref) { ref.options=opts; ref.data=data; ref.update(); return ref; }
+    return new Chart(document.getElementById(id), { type, data, options:opts });
+  }
+
+  iChart      = apply(iChart,      'iChart',      'bar',  iData,      commonOpts('Dollars saved ($)', ym.iMax));
+  costChart   = apply(costChart,   'costChart',   'bar',  costData,   costOpts);
+  timingChart = apply(timingChart, 'timingChart', 'line', timingData, commonOpts('Interest saved ($)', ym.timingMax));
+  mChart      = apply(mChart,      'mChart',      'line', mData,      commonOpts('Balance ($)', ym.mMax));
+}
+
+// Rerender charts when dark mode changes
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+  [iChart,costChart,timingChart,mChart].forEach(c => { if(c) c.destroy(); });
+  iChart=costChart=timingChart=mChart=null;
+  update();
+});
+
+update();
+</script>
+</body>
+</html>
